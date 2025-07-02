@@ -19,40 +19,37 @@ const GenerateProgramPage = () => {
 
   const messageContainerRef = useRef<HTMLDivElement>(null);
 
-  // SOLUTION to get rid of "Meeting has ended" error
+  // Prevent known error
   useEffect(() => {
     const originalError = console.error;
-    // override console.error to ignore "Meeting has ended" errors
     console.error = function (msg, ...args) {
       if (
-        msg &&
+        typeof msg === "string" &&
         (msg.includes("Meeting has ended") ||
           (args[0] && args[0].toString().includes("Meeting has ended")))
       ) {
-        console.log("Ignoring known error: Meeting has ended");
-        return; // don't pass to original handler
+        console.log("🔇 Ignoring known error: Meeting has ended");
+        return;
       }
-
-      // pass all other errors to the original handler
       return originalError.call(console, msg, ...args);
     };
 
-    // restore original handler on unmount
     return () => {
       console.error = originalError;
     };
   }, []);
 
-  // auto-scroll messages
+  // Auto scroll to bottom when messages update
   useEffect(() => {
     if (messageContainerRef.current) {
       messageContainerRef.current.scrollTop = messageContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // navigate user to profile page after the call ends
+  // After call ends, redirect
   useEffect(() => {
     if (callEnded) {
+      console.log("✅ Call ended, redirecting to /profile in 1.5s");
       const redirectTimer = setTimeout(() => {
         router.push("/profile");
       }, 1500);
@@ -61,17 +58,17 @@ const GenerateProgramPage = () => {
     }
   }, [callEnded, router]);
 
-  // setup event listeners for vapi
+  // Setup vapi event listeners
   useEffect(() => {
     const handleCallStart = () => {
-      console.log("Call started");
+      console.log("📞 Call started");
       setConnecting(false);
       setCallActive(true);
       setCallEnded(false);
     };
 
     const handleCallEnd = () => {
-      console.log("Call ended");
+      console.log("📴 Call ended");
       setCallActive(false);
       setConnecting(false);
       setIsSpeaking(false);
@@ -79,15 +76,17 @@ const GenerateProgramPage = () => {
     };
 
     const handleSpeechStart = () => {
-      console.log("AI started Speaking");
+      console.log("🗣️ AI started speaking");
       setIsSpeaking(true);
     };
 
     const handleSpeechEnd = () => {
-      console.log("AI stopped Speaking");
+      console.log("🔇 AI stopped speaking");
       setIsSpeaking(false);
     };
+
     const handleMessage = (message: any) => {
+      console.log("📩 Message received:", message);
       if (message.type === "transcript" && message.transcriptType === "final") {
         const newMessage = { content: message.transcript, role: message.role };
         setMessages((prev) => [...prev, newMessage]);
@@ -95,11 +94,12 @@ const GenerateProgramPage = () => {
     };
 
     const handleError = (error: any) => {
-      console.log("Vapi Error", error);
+      console.error("❌ Vapi Error:", error);
       setConnecting(false);
       setCallActive(false);
     };
 
+    console.log("🎧 Setting up vapi event listeners");
     vapi
       .on("call-start", handleCallStart)
       .on("call-end", handleCallEnd)
@@ -108,8 +108,8 @@ const GenerateProgramPage = () => {
       .on("message", handleMessage)
       .on("error", handleError);
 
-    // cleanup event listeners on unmount
     return () => {
+      console.log("🧹 Cleaning up vapi event listeners");
       vapi
         .off("call-start", handleCallStart)
         .off("call-end", handleCallEnd)
@@ -121,9 +121,12 @@ const GenerateProgramPage = () => {
   }, []);
 
   const toggleCall = async () => {
-    if (callActive) vapi.stop();
-    else {
+    if (callActive) {
+      console.log("🛑 Stopping call via vapi.stop()");
+      vapi.stop();
+    } else {
       try {
+        console.log("🚀 Starting call...");
         setConnecting(true);
         setMessages([]);
         setCallEnded(false);
@@ -132,14 +135,27 @@ const GenerateProgramPage = () => {
           ? `${user.firstName} ${user.lastName || ""}`.trim()
           : "There";
 
-        await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
+        console.log("🧑 Full Name:", fullName);
+        console.log("🆔 User ID:", user?.id);
+        console.log("🔑 Workflow ID:", process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID);
+
+        if (!process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID) {
+          console.error("🚫 VAPI Workflow ID is missing!");
+          setConnecting(false);
+          return;
+        }
+
+        await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID, {
           variableValues: {
             full_name: fullName,
             user_id: user?.id,
           },
         });
+
+        console.log("✅ Call successfully started!");
+
       } catch (error) {
-        console.log("Failed to start call", error);
+        console.error("🔥 Failed to start call:", error);
         setConnecting(false);
       }
     }
